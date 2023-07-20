@@ -25,7 +25,7 @@ public class ClienteServiceImpl implements IClienteService{
 	@Transactional(readOnly = true)
 	public Page<Cliente> findAll(Pageable pageable) {	//Con este metodo definimos la cantidad de elementos por pagina
 		return clienteDao.findAll(pageable);
-	}
+	}	//Para devolver la cantidad deaseada de elementos y no todos  completamente.
 	@Override
 	@Transactional(readOnly = true)
 	public Cliente findById(Long id) {
