@@ -29,9 +29,8 @@ public class Cliente implements Serializable {
     //@NotNull(message = "No puede estar vacio")//Se puede aplicar a cualquier tipo de dato, ya sean campos de clase o parámetros de métodos.
     @Column(name = "create_at")//Cuando el atributo se llame igual a la columna. Se puede omitir esta anotacion.
     @Temporal(TemporalType.DATE)
-    //Indicar cual va a ser la transformacion o el tipo de dato equivalente con el que se va a trabajar en al BD (DATE,TIME...)
+    //Indicar cuál va a ser la transformacion o el tipo de dato equivalente con el que se va a trabajar en al BD (DATE,TIME...)
     private Date createAt;
-
     private String foto;
 
     @PrePersist
@@ -82,11 +81,9 @@ public class Cliente implements Serializable {
     public String getFoto() {
         return foto;
     }
-
     public void setFoto(String foto) {
         this.foto = foto;
     }
-
     private static final long serialVersionUID = 1L;
 
 }

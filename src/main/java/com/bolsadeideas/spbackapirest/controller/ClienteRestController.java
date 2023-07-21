@@ -1,6 +1,8 @@
 package com.bolsadeideas.spbackapirest.controller;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -9,11 +11,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
 import jakarta.validation.Valid;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
@@ -34,6 +42,8 @@ public class ClienteRestController {
 
     @Autowired
     private ClienteServiceImpl clienteService;
+
+    private final Logger log = LoggerFactory.getLogger(ClienteRestController.class);
 
     @GetMapping("/clientes")
     public List<Cliente> index() {
@@ -113,8 +123,8 @@ public class ClienteRestController {
                 errors.add("El campo \'"+err.getField()+"\' "+err.getDefaultMessage());
             }Forma con Streams de manejar errores:*/
 
-//Toma una lista de errores de validación de campos (FieldError) y crea una lista de cadenas de texto que describen cada error.
-//El resultado final se almacena en la variable 'errors', que es una lista de cadenas (List<String>).
+        //Toma una lista de errores de validación de campos (FieldError) y crea una lista de cadenas de texto que describen cada error.
+        //El resultado final se almacena en la variable 'errors', que es una lista de cadenas (List<String>).
             List<String> errors = result.getFieldErrors() // Obtiene la lista de errores de validación de campos del objeto 'result'
                     .stream() // Convierte la lista en un flujo de elementos para facilitar su manipulación.
                     .map(err -> "El campo \'" + err.getField() + "\' " + err.getDefaultMessage()) //Mapea cada error a una cadena de texto que describe el campo y su mensaje de error
@@ -150,10 +160,21 @@ public class ClienteRestController {
 
     @DeleteMapping("clientes/{id}")
     public ResponseEntity<?> delete(@PathVariable Long id) {
-        //Cliente eliminado = clienteService.findById(id);
         Map<String, Object> response = new HashMap<>();
         try {
+            Cliente cliente = clienteService.findById(id);
+            //Revisamos si el cliente ya tiene una foto subida, para borrarla y mantener siempre una foto por cliente:
+            String fotoAnterior = cliente.getFoto();
+            if (fotoAnterior != null && fotoAnterior.length() > 0 ) {   //Si el cliente tiene ya una imagen
+                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta del la imagen existente
+                File archivoFotoAnterior = rutaFotoAnterior.toFile();
+                if (archivoFotoAnterior.exists() && archivoFotoAnterior.canRead()) {    //Si la imagen ahora en formato archivo existe y se puede leer:
+                    archivoFotoAnterior.delete();   //Eliminela
+                }
+            }
+
             clienteService.delete(id);
+
         }catch (DataAccessException e){ //Si el JSON del cliente a editar incumple con alguna normas de dicho objeto en la BDD
             response.put("mensaje: ", "Error al eliminar de la base de datos!");
             response.put("error", e.getMessage().concat(":").concat(e.getMostSpecificCause().getMessage()));
@@ -164,28 +185,64 @@ public class ClienteRestController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
-    @PostMapping("clientes/upload")
+    @PostMapping("clientes/upload") //Endopoint para subir foto
     public ResponseEntity<?> upload(@RequestParam("archivo")MultipartFile archivo, @RequestParam("id") Long id_cliente){
         Map<String, Object> response = new HashMap<>(); //Creamos el Map en el que guardamos lo que se responde desde el back.
-        Cliente cliente = clienteService.findById(id_cliente);
+        Cliente cliente = clienteService.findById(id_cliente);  //Obtenemos el cliente al que se enlazara la imagen.
+
         if (!archivo.isEmpty()) {   //Si el archivo no esta vacio:
             String nombreArchivo = UUID.randomUUID().toString()+"_"+archivo.getOriginalFilename().replace(" ",""); //>1
             Path rutaArchivo = Paths.get("uploads").resolve(nombreArchivo).toAbsolutePath();
-            //Modificamos la ruta del archivo subido para que haga parte de la carpeta "uploads" del proyecto.
+            //Creamos una ruta con el nombre del archivo, donde haga parte de la carpeta "uploads" del proyecto.
+            log.info(rutaArchivo.toString());   //Es como el System.out.println(); de Spring Boot. Obvio tiene un monton mas de caracteristicas
             try {
-                Files.copy(archivo.getInputStream(), rutaArchivo);  //Guardamos el archivo en la carpeta.
+                Files.copy(archivo.getInputStream(), rutaArchivo);  //Guardamos el archivo en la ruta que le creamos antes.
             } catch (IOException e) {
-                response.put("mensaje: ", "Error alsubir la imagen del cliente: "+nombreArchivo);
+                response.put("mensaje: ", "Error al subir la imagen del cliente: "+nombreArchivo);
                 response.put("error", e.getMessage().concat(":").concat(e.getCause().getMessage()));
                 return new ResponseEntity<Map<String, Object>>(response, HttpStatus.INTERNAL_SERVER_ERROR);
             }
+
+            //Revisamos si el cliente ya tiene una foto subida, para borrarla y mantener siempre una foto por cliente:
+            String fotoAnterior = cliente.getFoto();
+            if (fotoAnterior != null && fotoAnterior.length() > 0 ) {   //Si el cliente tiene ya una imagen
+                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
+                File archivoFotoAnterior = rutaFotoAnterior.toFile();
+                if (archivoFotoAnterior.exists() && archivoFotoAnterior.canRead()) {    //Si la imagen ahora en formato archivo existe y se puede leer:
+                    archivoFotoAnterior.delete();   //Eliminela.
+                }
+            }
+
             cliente.setFoto(nombreArchivo);
+
             clienteService.save(cliente);
-            response.put("cliente: ", cliente);
+
+            response.put("cliente", cliente);
             response.put("mensaje: ", "Foto subida correctamente: "+ nombreArchivo);
+
         }
-        return new ResponseEntity<Map<String, Object>>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        return new ResponseEntity<Map<String, Object>>(response, HttpStatus.CREATED);
     }
+
+    @GetMapping("uploads/img/{nombreFoto:.+}")  //Expresion regular que indica que el parametro tendra un punto y algo mas .jpg,.png,.jpeg
+    public ResponseEntity<Resource> verFoto(@PathVariable String nombreFoto){
+        Path rutaFotoAnterior = Paths.get("uploads").resolve(nombreFoto).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
+        log.info(rutaFotoAnterior.toString());
+        Resource recurso = null;
+
+        try {
+            recurso = new UrlResource(rutaFotoAnterior.toUri());//>2
+        } catch (MalformedURLException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (!recurso.exists() && ! recurso.isReadable()) {  //Si existe y es legible.
+            throw new RuntimeException("No se pudo cargar la imagen: "+nombreFoto);
+        }
+        HttpHeaders cabecera = new HttpHeaders();
+        cabecera.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\""+recurso.getFilename()+"\"");//>3
+        return new ResponseEntity<Resource>(recurso, cabecera, HttpStatus.OK);
+    }/*Este metodo crea un endpoint en el cual, al pasarle el nombre de la imagen desde el navegador, la descargara automaticamente*/
 
 }
 
@@ -193,4 +250,18 @@ public class ClienteRestController {
 * >1: Como se van todas las imagenes subidas por los usuarios en la carpeta "uploads", pueed existir la posibilidad de que
 *     se suban dos archivos con el mismo nombre, lo que generaria conflicto y problemas. Para eso apoyandonos en la clase
 *     UUID y su metodo .randomUUID() nos aseguramos de darle al nombre del archivo un random unico y solucionar ese problema.
-* */
+*
+* >2: En esta línea, desde el Path de la imagen/archivo la convertimos a una URI (Se utiliza para identificar de manera única un recurso)
+*
+* URI: Es una secuencia de caracteres que utilizada para identificar de manera única un recurso en Internet o en un sistema de archivos.
+*  Tienen este formato: scheme:[//[user:password@]host[:port]][/]path[?query][#fragment]
+*  Se ven de esta manera: http://www.ejemplo.com:8080/carpeta/archivo.html?param1=valor1#seccion2
+*
+* >3: Se agrega una cabecera a la respuesta HTTP que indica que el contenido debe ser tratado como una descarga adjunta
+*    ("attachment") y se especifica el nombre del archivo.
+*    HttpHeaders.CONTENT_DISPOSITION: Es una constante definida en la clase HttpHeaders y representa el nombre del encabezado HTTP que queremos configurar.
+*    "attachment; filename=\"" + recurso.getFilename() + "\"": Es el valor del encabezado Content-Disposition que se asignará a la cabecera. Aquí es donde se especifica la disposición del contenido y el nombre del archivo para la descarga adjunta.
+*    attachment: Es una indicación para el cliente de que el contenido debe ser tratado como una descarga adjunta, lo que significa que el cliente debería descargar el contenido como un archivo en lugar de mostrarlo directamente en el navegador.
+*    filename=\"...\": Esta parte se utiliza para especificar el nombre del archivo que se descargará. En este caso, se utiliza el método getFilename() del recurso para obtener el nombre del archivo y se coloca dentro de comillas dobles
+*    (esto es una buena práctica para manejar espacios y caracteres especiales en el nombre del archivo).
+ * */
