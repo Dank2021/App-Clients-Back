@@ -185,7 +185,7 @@ public class ClienteRestController {
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
-    @PostMapping("clientes/upload") //Endopoint para subir foto
+    @PostMapping("clientes/upload") //Endopoint para subir foto.
     public ResponseEntity<?> upload(@RequestParam("archivo")MultipartFile archivo, @RequestParam("id") Long id_cliente){
         Map<String, Object> response = new HashMap<>(); //Creamos el Map en el que guardamos lo que se responde desde el back.
         Cliente cliente = clienteService.findById(id_cliente);  //Obtenemos el cliente al que se enlazara la imagen.
@@ -224,10 +224,11 @@ public class ClienteRestController {
         return new ResponseEntity<Map<String, Object>>(response, HttpStatus.CREATED);
     }
 
-    @GetMapping("uploads/img/{nombreFoto:.+}")  //Expresion regular que indica que el parametro tendra un punto y algo mas .jpg,.png,.jpeg
+    @GetMapping("uploads/img/{nombreFoto:.+}")//Endpoint que recibe el nombre de la imagen y la descarga automáticamente.
+    // img/{nombreFoto:.+} Expresion regular que indica que el parametro tendra un punto y algo mas .jpg,.png,.jpeg
     public ResponseEntity<Resource> verFoto(@PathVariable String nombreFoto){
         Path rutaFotoAnterior = Paths.get("uploads").resolve(nombreFoto).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
-        log.info(rutaFotoAnterior.toString());
+        log.info(rutaFotoAnterior.toString());//Imprimir la ruta reconstruida
         Resource recurso = null;
 
         try {
@@ -236,13 +237,22 @@ public class ClienteRestController {
             throw new RuntimeException(e);
         }
 
-        if (!recurso.exists() && ! recurso.isReadable()) {  //Si existe y es legible.
-            throw new RuntimeException("No se pudo cargar la imagen: "+nombreFoto);
+        if (!recurso.exists() && !recurso.isReadable()) {  //Si no existe y no es legible.
+            //Como no existe el archivo/imagen, le asignamos por defecto la ruta de la imagen por defecto not_user.png.
+            rutaFotoAnterior = Paths.get("src/main/resources/static/images").resolve("not_user.png").toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
+            try {
+                recurso = new UrlResource(rutaFotoAnterior.toUri());//>2
+            } catch (MalformedURLException e) {
+                throw new RuntimeException(e);
+            }
+
+            log.error("No se pudo cargar la imagen: "+nombreFoto);
+
         }
         HttpHeaders cabecera = new HttpHeaders();
         cabecera.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\""+recurso.getFilename()+"\"");//>3
         return new ResponseEntity<Resource>(recurso, cabecera, HttpStatus.OK);
-    }/*Este metodo crea un endpoint en el cual, al pasarle el nombre de la imagen desde el navegador, la descargara automaticamente*/
+    }
 
 }
 
