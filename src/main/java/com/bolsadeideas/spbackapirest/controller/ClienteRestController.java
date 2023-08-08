@@ -159,14 +159,14 @@ public class ClienteRestController {
     }
 
     @DeleteMapping("clientes/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
+    public ResponseEntity<?> delete(@PathVariable Long id) {//Endpoint para eliminar cliente y su foto.
         Map<String, Object> response = new HashMap<>();
         try {
             Cliente cliente = clienteService.findById(id);
             //Revisamos si el cliente ya tiene una foto subida, para borrarla y mantener siempre una foto por cliente:
             String fotoAnterior = cliente.getFoto();
             if (fotoAnterior != null && fotoAnterior.length() > 0 ) {   //Si el cliente tiene ya una imagen
-                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta del la imagen existente
+                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
                 File archivoFotoAnterior = rutaFotoAnterior.toFile();
                 if (archivoFotoAnterior.exists() && archivoFotoAnterior.canRead()) {    //Si la imagen ahora en formato archivo existe y se puede leer:
                     archivoFotoAnterior.delete();   //Eliminela
@@ -226,7 +226,7 @@ public class ClienteRestController {
 
     @GetMapping("uploads/img/{nombreFoto:.+}")//Endpoint que recibe el nombre de la imagen y la descarga automáticamente.
     // img/{nombreFoto:.+} Expresion regular que indica que el parametro tendra un punto y algo mas .jpg,.png,.jpeg
-    public ResponseEntity<Resource> verFoto(@PathVariable String nombreFoto){
+    public ResponseEntity<Resource> descargarFoto(@PathVariable String nombreFoto){
         Path rutaFotoAnterior = Paths.get("uploads").resolve(nombreFoto).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
         log.info(rutaFotoAnterior.toString());//Imprimir la ruta reconstruida
         Resource recurso = null;
