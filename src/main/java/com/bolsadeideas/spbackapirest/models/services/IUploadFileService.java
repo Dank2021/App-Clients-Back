@@ -9,7 +9,7 @@ import java.nio.file.Path;
 
 public interface IUploadFileService {
 
-    public Resource descargarFoto(String nombreFoto) throws MalformedURLException;
+    public Resource cargar(String nombreFoto) throws MalformedURLException;
     public String guardar(MultipartFile archivo) throws IOException;
     public boolean eliminar(String nombreFoto);
     public Path obternerURL(String nombreFoto);

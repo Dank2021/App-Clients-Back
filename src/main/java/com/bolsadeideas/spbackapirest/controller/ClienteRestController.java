@@ -1,23 +1,16 @@
 package com.bolsadeideas.spbackapirest.controller;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
+import com.bolsadeideas.spbackapirest.models.services.IUploadFileService;
 import jakarta.validation.Valid;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,8 +35,8 @@ public class ClienteRestController {
 
     @Autowired
     private ClienteServiceImpl clienteService;
-
-    private final Logger log = LoggerFactory.getLogger(ClienteRestController.class);
+    @Autowired
+    private IUploadFileService uploadFileServiceImpl;
 
     @GetMapping("/clientes")
     public List<Cliente> index() {
@@ -57,7 +50,7 @@ public class ClienteRestController {
     @GetMapping("/clientes/{id}")
     @ResponseStatus(HttpStatus.OK)  //Es el estado por defecto, cuando una peticion sale exitosa, se le asigna un 200 automaticamente.
     public ResponseEntity<?> indexId(@PathVariable Long id) {
-        Cliente cliente = null;
+        Cliente cliente;
         Map<String, Object> response = new HashMap<>();
         try {
             cliente = clienteService.findById(id);
@@ -127,7 +120,7 @@ public class ClienteRestController {
         //El resultado final se almacena en la variable 'errors', que es una lista de cadenas (List<String>).
             List<String> errors = result.getFieldErrors() // Obtiene la lista de errores de validación de campos del objeto 'result'
                     .stream() // Convierte la lista en un flujo de elementos para facilitar su manipulación.
-                    .map(err -> "El campo \'" + err.getField() + "\' " + err.getDefaultMessage()) //Mapea cada error a una cadena de texto que describe el campo y su mensaje de error
+                    .map(err -> "El campo '" + err.getField() + "' " + err.getDefaultMessage()) //Mapea cada error a una cadena de texto que describe el campo y su mensaje de error
                     .collect(Collectors.toList()); // Recolecta las cadenas de texto en una lista nuevamente y las asigna a la variable 'errors'
 
             response.put("errors", errors);
@@ -163,19 +156,11 @@ public class ClienteRestController {
         Map<String, Object> response = new HashMap<>();
         try {
             Cliente cliente = clienteService.findById(id);
-            //Revisamos si el cliente ya tiene una foto subida, para borrarla y mantener siempre una foto por cliente:
-            String fotoAnterior = cliente.getFoto();
-            if (fotoAnterior != null && fotoAnterior.length() > 0 ) {   //Si el cliente tiene ya una imagen
-                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
-                File archivoFotoAnterior = rutaFotoAnterior.toFile();
-                if (archivoFotoAnterior.exists() && archivoFotoAnterior.canRead()) {    //Si la imagen ahora en formato archivo existe y se puede leer:
-                    archivoFotoAnterior.delete();   //Eliminela
-                }
-            }
 
+            uploadFileServiceImpl.eliminar(cliente.getFoto());
             clienteService.delete(id);
 
-        }catch (DataAccessException e){ //Si el JSON del cliente a editar incumple con alguna normas de dicho objeto en la BDD
+        }catch (DataAccessException e){ //Si el JSON del cliente a editar incumple con alguna norma de dicho objeto en la BDD
             response.put("mensaje: ", "Error al eliminar de la base de datos!");
             response.put("error", e.getMessage().concat(":").concat(e.getMostSpecificCause().getMessage()));
             return new ResponseEntity<Map<String, Object>>(response, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -189,33 +174,24 @@ public class ClienteRestController {
     public ResponseEntity<?> upload(@RequestParam("archivo")MultipartFile archivo, @RequestParam("id") Long id_cliente){
         Map<String, Object> response = new HashMap<>(); //Creamos el Map en el que guardamos lo que se responde desde el back.
         Cliente cliente = clienteService.findById(id_cliente);  //Obtenemos el cliente al que se enlazara la imagen.
+        String nombreArchivo = null;
 
         if (!archivo.isEmpty()) {   //Si el archivo no esta vacio:
-            String nombreArchivo = UUID.randomUUID().toString()+"_"+archivo.getOriginalFilename().replace(" ",""); //>1
-            Path rutaArchivo = Paths.get("uploads").resolve(nombreArchivo).toAbsolutePath();
-            //Creamos una ruta con el nombre del archivo, donde haga parte de la carpeta "uploads" del proyecto.
-            log.info(rutaArchivo.toString());   //Es como el System.out.println(); de Spring Boot. Obvio tiene un monton mas de caracteristicas
             try {
-                Files.copy(archivo.getInputStream(), rutaArchivo);  //Guardamos el archivo en la ruta que le creamos antes.
+                nombreArchivo = uploadFileServiceImpl.guardar(archivo); //Guardamos el arhivo en la carpeta uploads.
             } catch (IOException e) {
-                response.put("mensaje: ", "Error al subir la imagen del cliente: "+nombreArchivo);
+                response.put("mensaje: ", "Error al subir la archivo: "+nombreArchivo);
                 response.put("error", e.getMessage().concat(":").concat(e.getCause().getMessage()));
                 return new ResponseEntity<Map<String, Object>>(response, HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
-            //Revisamos si el cliente ya tiene una foto subida, para borrarla y mantener siempre una foto por cliente:
             String fotoAnterior = cliente.getFoto();
-            if (fotoAnterior != null && fotoAnterior.length() > 0 ) {   //Si el cliente tiene ya una imagen
-                Path rutaFotoAnterior = Paths.get("uploads").resolve(fotoAnterior).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
-                File archivoFotoAnterior = rutaFotoAnterior.toFile();
-                if (archivoFotoAnterior.exists() && archivoFotoAnterior.canRead()) {    //Si la imagen ahora en formato archivo existe y se puede leer:
-                    archivoFotoAnterior.delete();   //Eliminela.
-                }
-            }
 
-            cliente.setFoto(nombreArchivo);
+            uploadFileServiceImpl.eliminar(fotoAnterior);//Revisamos si el cliente ya tiene una foto, para borrarla y mantener siempre una foto por cliente:
 
-            clienteService.save(cliente);
+            cliente.setFoto(nombreArchivo); //Actualizamos/Agregamos el nuevo nombre de la foto al atributo Foto del cliente.
+
+            clienteService.save(cliente);   //Salvamos los cambios hechos.
 
             response.put("cliente", cliente);
             response.put("mensaje: ", "Foto subida correctamente: "+ nombreArchivo);
@@ -226,29 +202,15 @@ public class ClienteRestController {
 
     @GetMapping("uploads/img/{nombreFoto:.+}")//Endpoint que recibe el nombre de la imagen y la descarga automáticamente.
     // img/{nombreFoto:.+} Expresion regular que indica que el parametro tendra un punto y algo mas .jpg,.png,.jpeg
-    public ResponseEntity<Resource> descargarFoto(@PathVariable String nombreFoto){
-        Path rutaFotoAnterior = Paths.get("uploads").resolve(nombreFoto).toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
-        log.info(rutaFotoAnterior.toString());//Imprimir la ruta reconstruida
-        Resource recurso = null;
+    public ResponseEntity<Resource> downloadPhoto(@PathVariable String nombreFoto){
 
+        Resource recurso = null;
         try {
-            recurso = new UrlResource(rutaFotoAnterior.toUri());//>2
+            recurso = uploadFileServiceImpl.cargar(nombreFoto); //Convertimos el nombre foto a un Resource que contiene su correspondiente URI.
         } catch (MalformedURLException e) {
             throw new RuntimeException(e);
         }
 
-        if (!recurso.exists() && !recurso.isReadable()) {  //Si no existe y no es legible.
-            //Como no existe el archivo/imagen, le asignamos por defecto la ruta de la imagen por defecto not_user.png.
-            rutaFotoAnterior = Paths.get("src/main/resources/static/images").resolve("not_user.png").toAbsolutePath();//Construimos de nuevo la ruta de la imagen existente
-            try {
-                recurso = new UrlResource(rutaFotoAnterior.toUri());//>2
-            } catch (MalformedURLException e) {
-                throw new RuntimeException(e);
-            }
-
-            log.error("No se pudo cargar la imagen: "+nombreFoto);
-
-        }
         HttpHeaders cabecera = new HttpHeaders();
         cabecera.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\""+recurso.getFilename()+"\"");//>3
         return new ResponseEntity<Resource>(recurso, cabecera, HttpStatus.OK);
