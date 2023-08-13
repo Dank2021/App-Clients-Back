@@ -3,18 +3,21 @@ package com.bolsadeideas.spbackapirest.models.services;
 
 import java.util.List;
 import com.bolsadeideas.spbackapirest.models.entity.Cliente;
+import com.bolsadeideas.spbackapirest.models.entity.Region;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 public interface IClienteService {
 
-	public List<Cliente> findAll();
-	public Page<Cliente> findAll(Pageable pageable);
+	List<Cliente> findAll();
+	Page<Cliente> findAllPage(Pageable pageable);
 
-	public Cliente findById(Long id);
+	Cliente findById(Long id);
 
-	public Cliente save(Cliente cliente);
+	Cliente save(Cliente cliente);
 
-	public void delete(Long id);
+	void delete(Long id);
+
+	public List<Region> findAllRegions();
 		
 }

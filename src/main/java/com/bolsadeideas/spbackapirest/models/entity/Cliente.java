@@ -1,10 +1,14 @@
 package com.bolsadeideas.spbackapirest.models.entity;
 
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Date;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 @Entity
@@ -33,10 +37,18 @@ public class Cliente implements Serializable {
     private Date createAt;
     private String foto;
 
-    @PrePersist
-    public void prePersist() {
-        createAt = new Date();
-    }   //Creamos la fecha automatica e inmediatamente. Haciendo que los objetos lo primero que tenga sea una fecha.
+    @ManyToOne(fetch = FetchType.LAZY) // La relación es de tipo "Muchos a Uno" y se carga de manera diferida (lazy).
+    @JoinColumn(name = "region_id") // Columna en la tabla Cliente que se utiliza para la relación con la tabla Región.
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"}) // Propiedades a ignorar durante la serialización JSON. >1
+    @NotNull(message = "La region no puede estar vacia")
+    private Region region; // La región a la que pertenece este cliente.
+
+
+
+    @PrePersist //>2: Establece automáticamente la fecha de creación antes de que la entidad sea persistida en BD.
+    public void prePersist() {  // Se ejecuta antes de que la entidad sea persistida (guardada) en la base de datos.
+        createAt = new Date(); // Asignamos la fecha actual como fecha de creación.
+    }
 
     public Long getId() {
         return id;
@@ -74,7 +86,7 @@ public class Cliente implements Serializable {
         return createAt;
     }
 
-    public void setCreteAt(Date creatAt) {
+    public void setCreateAt(Date creatAt) {
         this.createAt = creatAt;
     }
 
@@ -84,12 +96,31 @@ public class Cliente implements Serializable {
     public void setFoto(String foto) {
         this.foto = foto;
     }
+
+    public Region getRegion() {
+        return region;
+    }
+
+    public void setRegion(Region region) {
+        this.region = region;
+    }
+
+    @Serial
     private static final long serialVersionUID = 1L;
 
 }
 
 /*
-* @PrePersist:
-* Esta anotación se aplica a métodos que deben ejecutarse antes de que se persista (almacene en la base de datos)
-* una entidad en el EntityManager (gestor de entidades). Es decir, antes de que se cree una nueva fila en la tabla
-* correspondiente a la entidad en la base de datos.*/
+* >1: @JsonIgnoreProperties
+*    La anotación @JsonIgnoreProperties se utiliza para indicar a Jackson que ciertas propiedades de un objeto Java deben
+*    ser ignoradas durante el proceso de serialización (convertir un objeto Java en JSON) o deserialización (convertir JSON en un objeto Java).
+*    Esto puede ser útil cuando deseas controlar qué propiedades deben o no deben incluirse en la representación JSON de un objeto.
+*
+*    Se utiliza @JsonIgnoreProperties en conjunto con JPA y Hibernate en una relación @ManyToOne para evitar que las propiedades
+*    "hibernateLazyInitializer" y "handler" se incluyan en la representación JSON del objeto. Estas propiedades están relacionadas
+*    con la inicialización diferida y la gestión interna de Hibernate y generalmente no son relevantes para la serialización JSON.
+*
+* >2: @PrePersist:
+*    Esta anotación se aplica a métodos que deben ejecutarse antes de que se persista (almacene en la base de datos)
+*    una entidad en el EntityManager (gestor de entidades). Es decir, antes de que se cree una nueva fila en la tabla
+*    correspondiente a la entidad en la base de datos.*/

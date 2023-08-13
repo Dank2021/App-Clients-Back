@@ -7,6 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.bolsadeideas.spbackapirest.models.entity.Cliente;
+import com.bolsadeideas.spbackapirest.models.entity.Region;
+import com.bolsadeideas.spbackapirest.models.services.IClienteService;
 import com.bolsadeideas.spbackapirest.models.services.IUploadFileService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,9 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
-
-import com.bolsadeideas.spbackapirest.models.entity.Cliente;
-import com.bolsadeideas.spbackapirest.models.services.ClienteServiceImpl;
 import org.springframework.web.multipart.MultipartFile;
 
 //Se utiliza para habilitar el acceso a recursos de un servidor web desde dominios distintos al dominio del servidor.
@@ -34,7 +34,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class ClienteRestController {
 
     @Autowired
-    private ClienteServiceImpl clienteService;
+    private IClienteService clienteService;
     @Autowired
     private IUploadFileService uploadFileServiceImpl;
 
@@ -43,9 +43,14 @@ public class ClienteRestController {
         return clienteService.findAll();
     }
 
-    @GetMapping("/clientes/page/{page}")    //En point que pagina los elementos del arreglo, y devuelve los de la pagina solicitada como parametro
+    @GetMapping("/clientes/regiones")       //
+    public List<Region> indexRegiones() {
+        return clienteService.findAllRegions();
+    }
+
+    @GetMapping("/clientes/page/{page}")    //Endpoint que pagina los elementos del arreglo, y devuelve los de la pagina solicitada como parametro
     public Page<Cliente> getPaginacion(@PathVariable Integer page) {        //Pedimos el numero de la pagina deseadaa como parametro.
-        return clienteService.findAll(PageRequest.of(page, 4)); //Devolvemos un tipo Page de 4 elementos por pagina.
+        return clienteService.findAllPage(PageRequest.of(page, 4)); //Devolvemos un tipo Page de 4 elementos por pagina.
     }
     @GetMapping("/clientes/{id}")
     @ResponseStatus(HttpStatus.OK)  //Es el estado por defecto, cuando una peticion sale exitosa, se le asigna un 200 automaticamente.
@@ -136,7 +141,8 @@ public class ClienteRestController {
             editable.setNombre(clienteNuevo.getNombre());
             editable.setApellido(clienteNuevo.getApellido());
             editable.setEmail(clienteNuevo.getEmail());
-            editable.setCreteAt(clienteNuevo.getCreateAt());
+            editable.setCreateAt(clienteNuevo.getCreateAt());
+            editable.setRegion(clienteNuevo.getRegion());
 
             clienteUpdated = clienteService.save(editable);
         }catch (DataAccessException e){ //Si el JSON del cliente a editar incumple con alguna normas de dicho objeto en la BDD
